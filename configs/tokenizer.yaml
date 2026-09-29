@@ -1,0 +1,48 @@
+# Two-level 256px VQ architecture and original single-stage loss recipe.
+model:
+  attention_backend: auto
+  vq_model:
+    quantize_mode: vq
+    vit_enc_model_size: small
+    vit_dec_model_size: large
+    vit_enc_patch_size: 16
+    vit_dec_patch_size: 16
+    codebook_size: 16384
+    use_l2_norm: true
+    commitment_cost: 0.25
+    token_size: 8
+  selector:
+    token_size: 8
+    num_patch_side_list: [1, 2, 4, 8, 16]
+    patch_size_list: [16, 16, 16, 16, 16]
+dataset:
+  preprocessing:
+    crop_size: 256
+losses:
+  discriminator_start: 200000
+  quantizer_weight: 1.0
+  discriminator_factor: 1.0
+  discriminator_weight: 0.1
+  perceptual_loss: lpips-convnext_s-1.0-0.1
+  perceptual_weight: 1.1
+  reconstruction_loss: l2
+  reconstruction_weight: 1.0
+  lecam_regularization_weight: 0.001
+training:
+  seed: 42
+  max_train_steps: 1000000
+  per_gpu_batch_size: 32
+  gradient_accumulation_steps: 1
+  mixed_precision: bf16
+  expansion_probability: 0.75
+  learning_rate: 0.0001
+  discriminator_learning_rate: 0.0001
+  weight_decay: 0.0001
+  beta1: 0.9
+  beta2: 0.999
+  warmup_steps: 10000
+  end_lr: 0.00001
+  max_grad_norm: 1.0
+  ema_decay: 0.999
+  save_every: 25000
+  log_every: 50

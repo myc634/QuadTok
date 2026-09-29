@@ -1,0 +1,47 @@
+QuadTok tokenizer code release
+
+This release is a tokenizer-only extraction and refactor of QuadTok development
+revision e16c53ba40c5183b02ef09d031def138848eb3d9. It retains the released VQ
+checkpoint's parameter names and the tensor-native kinship attention, hierarchical
+decoding, guided search and breadth-first pretokenization ordering.
+
+Portions derive from TiTok / 1d-tokenizer:
+https://github.com/bytedance/1d-tokenizer
+Copyright (2024) Bytedance Ltd. and/or its affiliates, Apache License 2.0.
+
+The source training code also credits One-D-Piece:
+https://github.com/turingmotors/One-D-Piece
+Modified code Copyright (2024) Turing Inc. and/or its affiliates, Apache License 2.0.
+
+Residual transformer blocks reference OpenCLIP:
+https://github.com/mlfoundations/open_clip
+The retained source block header contains its upstream reference.
+
+Image resize/crop helpers derive from OpenAI guided-diffusion (MIT):
+https://github.com/openai/guided-diffusion
+Copyright (c) 2021 OpenAI.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Inception feature extraction retains the source Apache-2.0 notices from the
+Lightning team and Bytedance, and references pytorch-fid / torch-fidelity:
+https://github.com/mseitzer/pytorch-fid
+https://github.com/toshas/torch-fidelity
+
+VGG LPIPS uses the externally installed lpips package:
+https://github.com/richzhang/PerceptualSimilarity
+ConvNeXt and VGG backbone weights are obtained through torchvision.
+Third-party packages and downloaded weights retain their own licenses.

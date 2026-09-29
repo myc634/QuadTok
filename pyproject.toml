@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quadtok"
+version = "0.1.0"
+description = "Content-adaptive image tokenizer: training, evaluation and pretokenization"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = [
+  "torch>=2.7,<2.9", "torchvision>=0.22,<0.24", "numpy>=1.24,<3",
+  "einops>=0.8", "omegaconf>=2.3", "accelerate>=1.2,<2",
+  "Pillow>=10", "lpips==0.1.4", "scipy>=1.10,<1.16",
+  "torch-fidelity==0.3.0", "braceexpand>=0.1.7"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "ruff==0.13.2"]
+
+[project.scripts]
+quadtok-train = "quadtok.train:main"
+quadtok-eval = "quadtok.evaluate:main"
+quadtok-pretokenize = "quadtok.pretokenize:main"
+
+[tool.setuptools.packages.find]
+include = ["quadtok*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
