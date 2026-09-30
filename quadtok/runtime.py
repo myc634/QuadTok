@@ -22,7 +22,7 @@ def inference_parser(description):
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--tau", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=1234)
-    parser.add_argument("--attention", choices=["auto", "flex", "sdpa"], default="auto")
+    parser.add_argument("--attention", choices=["auto", "sdpa"], default="auto")
     parser.add_argument("--precision", choices=["fp32", "bf16"], default="bf16")
     parser.add_argument("--tree", choices=["guided", "coarse", "full"], default="guided")
     parser.add_argument("--prefetch-batches", type=int, default=4)

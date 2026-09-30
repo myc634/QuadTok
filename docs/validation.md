@@ -1,5 +1,9 @@
 # Release validation
 
+The comparison below is a historical measurement of initial release `3992ea6`.
+FlexAttention has since been removed; current code supports SDPA only.
+The historical forward/inference comparison is not a training-throughput benchmark.
+
 Measured on 2026-09-29 with the released two-level 256px checkpoint on an
 NVIDIA A100-SXM4-80GB, PyTorch 2.7.1+cu128, CUDA 12.8, Python 3.10.
 The implementation was extracted from source revision
@@ -60,3 +64,10 @@ The end-to-end suite exited successfully. CPU-only tests pass with the CUDA test
 The repository also passes Ruff lint/format checks and builds a wheel with all three
 CLI entry points. Validation does not cover longer training convergence, other GPU
 architectures, or checkpoints outside the released architecture.
+
+## SDPA-only follow-up
+
+After removing Flex, the eight CPU/CUDA unit tests passed on A100. The updated SDPA
+benchmark passed reconstruction and guided pretokenization. Full optimizer-step
+profiling with Accelerate bf16 also completed with finite losses before/after GAN
+activation. See [training performance](training-performance.md) for the new baseline.

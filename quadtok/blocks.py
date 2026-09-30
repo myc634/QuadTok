@@ -252,8 +252,8 @@ class QuadTokDecoder(nn.Module):
 
     def _decode_optimize_core(self, z_quantized, lod_pad, pat_pad, seqlens):
         """Tensor core of the batched multi-tree decode (replaces the node-based _forward_optimize).
-        lod_pad/pat_pad: (B,S) long (padding lod=-1); z_quantized: (B,>=S,D). flex batched
-        Kinship BlockMask + batched hierarchical decode."""
+        lod_pad/pat_pad: (B,S) long (padding lod=-1); z_quantized: (B,>=S,D). batched
+        kinship attention mask + batched hierarchical decode."""
         device = lod_pad.device
         B, max_seq = lod_pad.shape
         z_emb = self.decoder_embed(z_quantized)
@@ -338,7 +338,7 @@ class QuadTokSelector(nn.Module):
     def _select_optimize_core(self, latent_feats, lod_pad, pat_pad, seqlens):
         """Tensor core of the batched multi-tree selection (replaces node-based _forward_optimize).
         latent_feats: (B,num_latent,D); lod_pad/pat_pad: (B,S) long (padding lod=-1).
-        flex batched selector Kinship BlockMask."""
+        Batched selector kinship attention mask."""
         device = latent_feats.device
         B, max_seq = lod_pad.shape
         num_latent = latent_feats.shape[1]

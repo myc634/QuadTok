@@ -42,18 +42,17 @@ def test_bfs_order_and_parent_groups():
             assert active[b, 64:][maps[2] == p].unique().numel() == 1
 
 
-@pytest.mark.parametrize("backend", ["sdpa", "flex"])
-def test_attention_reference_and_backward(backend):
-    if backend == "flex" and not torch.cuda.is_available():
-        pytest.skip("CUDA required for compiled FlexAttention")
-    device = "cuda" if backend == "flex" else "cpu"
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_attention_reference_and_backward(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
     torch.manual_seed(7)
     layer = ResidualAttentionBlock(128, 4).to(device)
     lod = torch.tensor([[3, 3, 4, 4, 4], [3, 3, 4, -1, -1]], device=device)
     patch = torch.tensor([[0, 1, 0, 1, 4], [0, 1, 0, 0, 0]], device=device)
     lengths = torch.tensor([5, 3], device=device)
     parent = parent_indices_vec(lod, patch, [1, 2, 4, 8, 16], 3)
-    mask = build_batched_selector_block_mask(2, lod, parent, lengths, 3, device, backend)
+    mask = build_batched_selector_block_mask(2, lod, parent, lengths, 3, device, "sdpa")
     # Independent dense mask, including the deliberately discarded padded query rows.
     expected = torch.zeros(2, 7, 7, dtype=torch.bool, device=device)
     for b in range(2):

@@ -5,18 +5,10 @@ Copyright (2024) Bytedance Ltd. and/or its affiliates. See LICENSE and NOTICE.
 """
 
 from collections import OrderedDict
-from functools import lru_cache
 
 import torch
 from torch import nn
 from torch.nn import functional as F
-
-
-@lru_cache(maxsize=1)
-def compiled_flex_attention():
-    from torch.nn.attention.flex_attention import flex_attention
-
-    return torch.compile(flex_attention, dynamic=True)
 
 
 class ResidualAttentionBlock(nn.Module):
@@ -49,10 +41,7 @@ class ResidualAttentionBlock(nn.Module):
             .contiguous()
             for t in qkv.chunk(3, -1)
         ]
-        if block_mask is None or isinstance(block_mask, torch.Tensor):
-            out = F.scaled_dot_product_attention(q, k, v, attn_mask=block_mask)
-        else:
-            out = compiled_flex_attention()(q, k, v, block_mask=block_mask)
+        out = F.scaled_dot_product_attention(q, k, v, attn_mask=block_mask)
         out = out.permute(2, 0, 1, 3).reshape(length, batch, width)
         x = x + F.linear(out, self.attn.out_proj.weight, self.attn.out_proj.bias)
         if self.mlp_ratio > 0:
@@ -72,7 +61,6 @@ def _mask(lod, parent, lengths, min_lod, device, num_latent=0, backend="auto"):
     total = size + num_latent
 
     def mask_mod(b, h, q, k):
-        # Flex block construction can inspect rounded-up indices outside total.
         qt = (q - num_latent).clamp(0, size - 1)
         kt = (k - num_latent).clamp(0, size - 1)
         lq, lk = lod[b, qt], lod[b, kt]
@@ -83,19 +71,8 @@ def _mask(lod, parent, lengths, min_lod, device, num_latent=0, backend="auto"):
         allow = allow | ((q >= lengths[b] + num_latent) & (k == 0))
         return allow & (q < total) & (k < total)
 
-    if backend not in ("auto", "sdpa", "flex"):
-        raise ValueError(f"Unknown attention backend: {backend}")
-    # The released two-level sequence is short; measured A100 throughput favors SDPA.
-    # Flex remains an explicit, verified option for backend comparisons.
-    use_flex = backend == "flex"
-    if use_flex:
-        if torch.device(device).type != "cuda":
-            raise ValueError("FlexAttention requires CUDA; use auto or sdpa on CPU.")
-        from torch.nn.attention.flex_attention import create_block_mask
-
-        return create_block_mask(
-            mask_mod, B=batch, H=None, Q_LEN=total, KV_LEN=total, device=device, _compile=True
-        )
+    if backend not in ("auto", "sdpa"):
+        raise ValueError(f"Only SDPA is supported; got {backend!r}")
     b = torch.arange(batch, device=device)[:, None, None]
     q = torch.arange(total, device=device)[None, :, None]
     k = torch.arange(total, device=device)[None, None, :]

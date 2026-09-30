@@ -1,4 +1,4 @@
-"""CUDA backend parity, kernel proof and steady-state tokenizer throughput.
+"""CUDA SDPA kernel profiling and steady-state tokenizer throughput.
 
 Run from the repository root: python -m benchmarks.gpu --checkpoint FILE --output results/gpu.json
 Timing excludes checkpoint loading, image decoding and compilation; includes tree masks,
@@ -18,11 +18,6 @@ from quadtok.model import load_model
 from quadtok.topology import build_slot_maps, random_active
 from quadtok.search import guided_search, extract_codes
 from quadtok.runtime import make_lpips, sha256
-
-
-def set_backend(model, name):
-    model.selector.attention_backend = name
-    model.decoder.attention_backend = name
 
 
 def measure(fn, warmup, repeats):
@@ -80,52 +75,28 @@ def main():
         base = torch.stack([ds[i % len(ds)][0] for i in range(max(args.batch_sizes))]).cuda()
     else:
         base = torch.rand(max(args.batch_sizes), 3, 256, 256, device="cuda")
-    active = random_active(2, "cuda", 0.75)
-    image = base[:1].expand(2, -1, -1, -1).contiguous()
     with torch.no_grad():
-        set_backend(model, "sdpa")
-        dense, _ = model(image, active)
-        set_backend(model, "flex")
-        sparse, _ = model(image, active)
-        error = (dense - sparse).abs()
-        report["fp32_reconstruction_parity"] = {
-            "max_abs": error.max().item(),
-            "mean_abs": error.mean().item(),
-            "psnr": (-10 * error.square().mean().clamp_min(1e-20).log10()).item(),
-        }
-        torch.testing.assert_close(sparse, dense, atol=5e-4, rtol=5e-4)
-        report["fp32_reconstruction_parity"]["passed"] = True
-        import quadtok.attention as attention_module
-
-        original_factory = attention_module.compiled_flex_attention
-        compiled = original_factory()
-        calls = []
-
-        def traced_flex(q, k, v, **kwargs):
-            calls.append({"device": str(q.device), "shape": list(q.shape)})
-            with torch.profiler.record_function("quadtok::compiled_flex_attention"):
-                return compiled(q, k, v, **kwargs)
-
-        attention_module.compiled_flex_attention = lambda: traced_flex
-        with torch.profiler.profile(
-            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
-        ) as prof:
+        image = base[:1]
+        active = random_active(1, "cuda", 0.75)
+        with torch.autocast("cuda", dtype=torch.bfloat16):
             model(image, active)
             torch.cuda.synchronize()
-        attention_module.compiled_flex_attention = original_factory
-        report["compiled_flex_calls"] = calls
-        assert len(calls) == 32 and all(c["device"].startswith("cuda") for c in calls)
-        report["flex_kernel_events"] = sorted(
+            with torch.profiler.profile(
+                activities=[
+                    torch.profiler.ProfilerActivity.CPU,
+                    torch.profiler.ProfilerActivity.CUDA,
+                ]
+            ) as prof:
+                model(image, active)
+                torch.cuda.synchronize()
+        report["attention_kernel_events"] = sorted(
             {
-                event.name
-                for event in prof.events()
-                if "flex" in event.name.lower() or "triton" in event.name.lower()
+                e.name
+                for e in prof.events()
+                if any(k in e.name.lower() for k in ["attention", "flash", "fmha"])
             }
         )
-        if not report["flex_kernel_events"]:
-            raise RuntimeError("Profiler did not capture FlexAttention/Triton events.")
-        for backend in ["sdpa", "flex"]:
-            set_backend(model, backend)
+        for backend in ["sdpa"]:
             for batch in args.batch_sizes:
                 images = base[:batch]
                 torch.manual_seed(1234 + batch)
@@ -145,8 +116,7 @@ def main():
                 print(json.dumps(row), flush=True)
         if args.guided:
             perceptual = make_lpips("cuda")
-            for backend in ["sdpa", "flex"]:
-                set_backend(model, backend)
+            for backend in ["sdpa"]:
                 for batch in args.batch_sizes:
                     images = base[:batch]
 

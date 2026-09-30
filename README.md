@@ -175,15 +175,14 @@ seed so changing process count does not change its search sequence.
 ## Attention and performance
 
 The shared implementation batches topology selection and hierarchical decoding as
-tensors. `--attention auto` selects **PyTorch SDPA**, which was faster for this short two-level
-sequence in the A100 measurements. Use `--attention flex` to explicitly select compiled
-**FlexAttention** for kinship-masked selector/decoder attention; ordinary encoder
-attention always uses SDPA. CPU supports `auto`/`sdpa`. The first CUDA calls compile kernels;
-exclude this startup cost from steady-state throughput measurements.
+tensors and uses **PyTorch SDPA only**. `--attention auto` and `--attention sdpa` are
+aliases. SDPA selects its CUDA kernel according to dtype, shape and mask support;
+using SDPA does not imply use of the `flash_attn_varlen_func` API.
 
-Inference defaults to bf16 on CUDA and fp32 on CPU. There is no silent Flex-to-SDPA
-fallback when FlexAttention compilation fails. Runtime metadata records the selected
-backend and precision. `--precision fp32` disables bf16 inference.
+Training uses one shared tree per batch, so sequence lengths are equal within a batch.
+The selector/decoder preserve the full kinship mask. This release does not use packed
+varlen FlashAttention. Inference defaults to bf16 on CUDA and fp32 on CPU; use
+`--precision fp32` to disable bf16 inference.
 
 ```bash
 python -m pytest -q
@@ -194,12 +193,15 @@ python -m benchmarks.gpu \
   --output results/gpu.json
 ```
 
-The benchmark validates fp32 reconstruction parity, captures Flex/Triton profiler events,
-and records synchronized warmed bf16 timing and peak allocated GPU memory. Reconstruction
+The benchmark captures actual SDPA kernel profiler events and records synchronized
+warmed bf16 timing and peak allocated GPU memory. Reconstruction
 timing includes the full model with a supplied random tree. Guided pretokenization timing
 includes image encoding, both candidate reconstructions, LPIPS selection and final code
 extraction; disk decoding/writing is excluded. Without `--data`, it uses seeded synthetic
 images and labels that explicitly in the report. See `docs/validation.md` for measured results.
+
+For the actual training attention kernels, measured optimizer-step baseline and optimization
+candidates, see [training performance](docs/training-performance.md).
 
 ## License and acknowledgments
 
