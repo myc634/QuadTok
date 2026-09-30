@@ -78,11 +78,21 @@ def main():
     )
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument(
+        "--per-gpu-batch-size", type=int, help="Override the config microbatch size"
+    )
+    parser.add_argument(
+        "--gradient-accumulation-steps", type=int, help="Override gradient accumulation"
+    )
+    parser.add_argument(
         "--set", nargs="*", default=[], help="OmegaConf dotted overrides (key=value)"
     )
     args = parser.parse_args()
     cfg = OmegaConf.merge(OmegaConf.load(args.config), OmegaConf.from_dotlist(args.set))
     t = cfg.training
+    if args.per_gpu_batch_size is not None:
+        t.per_gpu_batch_size = args.per_gpu_batch_size
+    if args.gradient_accumulation_steps is not None:
+        t.gradient_accumulation_steps = args.gradient_accumulation_steps
     if args.resume and args.init_checkpoint:
         parser.error("--resume and --init-checkpoint are mutually exclusive")
     if (
@@ -176,6 +186,12 @@ def main():
                     "attention": cfg.model.attention_backend,
                     "precision": precision,
                     "world_size": acc.num_processes,
+                    "per_gpu_batch_size": t.per_gpu_batch_size,
+                    "gradient_accumulation_steps": t.gradient_accumulation_steps,
+                    "global_batch_size": (
+                        t.per_gpu_batch_size * acc.num_processes * t.gradient_accumulation_steps
+                    ),
+                    "torch_compile": False,
                 }
             ),
             flush=True,

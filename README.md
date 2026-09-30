@@ -76,26 +76,35 @@ fine-level expansion probability 0.75. EMA uses the source decay ramp capped at 
 EMA, optimizer, scheduler, step and RNG state are
 saved in each checkpoint.
 
-```bash
-# Single GPU, image directory.
-python -m quadtok.train \
-  --data /datasets/imagenet/train \
-  --output outputs/tokenizer
+The default launcher uses **8 GPUs, 32 images per GPU and 1 accumulation step**
+(global batch **256**, matching the original VQ recipe). Training uses eager SDPA;
+`torch.compile` is not enabled.
 
-# Multiple GPUs, streaming tar shards.
-accelerate launch --num_processes 4 --multi_gpu -m quadtok.train \
+```bash
+# Default 8-GPU training, image directory.
+bash scripts/train.sh --data /datasets/imagenet/train --output outputs/tokenizer
+
+# Default 8-GPU training, streaming tar shards.
+bash scripts/train.sh \
   --shards '/datasets/imagenet/train-*.tar' \
   --output outputs/tokenizer --workers 4
 
-# Resume a training checkpoint.
-python -m quadtok.train \
+# Resume with the same batch settings.
+bash scripts/train.sh \
   --data /datasets/imagenet/train --output outputs/tokenizer \
   --resume outputs/tokenizer/checkpoint-00025000
+
+# Lower microbatch while preserving global batch 256.
+PER_GPU_BATCH_SIZE=16 GRADIENT_ACCUMULATION_STEPS=2 \
+  bash scripts/train.sh --data /datasets/imagenet/train --output outputs/tokenizer
 ```
 
+`GPUS_PER_NODE` overrides the default 8 GPUs; `PYTHON` selects the Python executable.
+You can also pass `--per-gpu-batch-size` and `--gradient-accumulation-steps` directly.
+The global batch is `per_gpu_batch_size × processes × accumulation` and is logged at
+startup. Reducing the GPU count changes the global batch unless you adjust accumulation.
 Use `--init-checkpoint checkpoints/pytorch_model.bin` for weight-only initialization.
-Use `--set training.per_gpu_batch_size=8 training.gradient_accumulation_steps=4` to
-adjust memory use. The global batch is `per_gpu_batch_size × processes × accumulation`.
+Other config values can be changed with `--set key=value`.
 For streaming training, provide at least `processes × max(workers,1)` input shards.
 Resume restores training state but restarts the data stream/epoch; it does not promise
 bit-exact sample replay. Keep the same configuration when resuming.
@@ -172,36 +181,12 @@ The A/B split is random and reproducible for a fixed seed, batch composition and
 list. Changing batch size can change the selected trees. Each shard has an independent
 seed so changing process count does not change its search sequence.
 
-## Attention and performance
+## Runtime
 
-The shared implementation batches topology selection and hierarchical decoding as
-tensors and uses **PyTorch SDPA only**. `--attention auto` and `--attention sdpa` are
-aliases. SDPA selects its CUDA kernel according to dtype, shape and mask support;
-using SDPA does not imply use of the `flash_attn_varlen_func` API.
-
-Training uses one shared tree per batch, so sequence lengths are equal within a batch.
-The selector/decoder preserve the full kinship mask. This release does not use packed
-varlen FlashAttention. Inference defaults to bf16 on CUDA and fp32 on CPU; use
-`--precision fp32` to disable bf16 inference.
-
-```bash
-python -m pytest -q
-python -m benchmarks.gpu \
-  --checkpoint checkpoints/pytorch_model.bin \
-  --data /datasets/imagenet/val --guided \
-  --batch-sizes 1 8 32 --warmup 3 --repeats 10 \
-  --output results/gpu.json
-```
-
-The benchmark captures actual SDPA kernel profiler events and records synchronized
-warmed bf16 timing and peak allocated GPU memory. Reconstruction
-timing includes the full model with a supplied random tree. Guided pretokenization timing
-includes image encoding, both candidate reconstructions, LPIPS selection and final code
-extraction; disk decoding/writing is excluded. Without `--data`, it uses seeded synthetic
-images and labels that explicitly in the report. See `docs/validation.md` for measured results.
-
-For the actual training attention kernels, measured optimizer-step baseline and optimization
-candidates, see [training performance](docs/training-performance.md).
+Only PyTorch SDPA is supported; `--attention auto` and `--attention sdpa` are aliases.
+The selector/decoder retain the kinship mask. This release does not use packed varlen
+FlashAttention or `torch.compile`. Inference defaults to bf16 on CUDA and fp32 on CPU;
+use `--precision fp32` to disable bf16 inference. Run `python -m pytest -q` for core tests.
 
 ## License and acknowledgments
 
